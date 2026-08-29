@@ -17,6 +17,12 @@ add_executable(tiny_renderer
 
 target_link_libraries(tiny_renderer PRIVATE tinyrenderer_core)
 
+add_executable(triangle_demo
+    src/triangle_demo.cpp
+)
+
+target_link_libraries(triangle_demo PRIVATE tinyrenderer_core)
+
 if(MSVC)
     target_compile_options(tinyrenderer_core PUBLIC /utf-8)
     target_compile_options(tinyrenderer_core PRIVATE /W4 /permissive-)

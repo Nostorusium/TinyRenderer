@@ -32,6 +32,7 @@ int main(const int argc, char* argv[])
     };
 
     constexpr tinyrenderer::Color line_color{230, 235, 255};
+    // 遍历面，再遍历边 随后逐个连线。三维空间的点 to_screen 到2d平面
     for (const auto& face : model.faces) {
         for (std::size_t edge = 0; edge < face.vertex_indices.size(); ++edge) {
             const auto& first_vertex = model.vertices[face.vertex_indices[edge]];

@@ -2,6 +2,7 @@
 #include "tinyrenderer/rasterizer.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <initializer_list>
 #include <iostream>
 #include <utility>
@@ -45,6 +46,15 @@ void check_same_image(const char* test_name,
                 ++failures;
             }
         }
+    }
+}
+
+void check_close(const char* test_name, const float actual, const float expected)
+{
+    if (std::abs(actual - expected) > 1.0e-5F) {
+        std::cerr << "FAILED: " << test_name << ", expected " << expected
+                  << " but got " << actual << '\n';
+        ++failures;
     }
 }
 
@@ -105,6 +115,87 @@ int main()
     tinyrenderer::draw_line(forward, 1, 1, 5, 3, white);
     tinyrenderer::draw_line(backward, 5, 3, 1, 1, white);
     check_same_image("reversing endpoints", forward, backward);
+
+    using tinyrenderer::ScreenPoint;
+    constexpr ScreenPoint point0{1.0F, 1.0F};
+    constexpr ScreenPoint point1{5.0F, 1.0F};
+    constexpr ScreenPoint point2{1.0F, 5.0F};
+
+    const auto at_vertex =
+        tinyrenderer::barycentric_at(point0, point1, point2, point0);
+    if (at_vertex) {
+        check_close("first vertex weight 0", at_vertex->weight0, 1.0F);
+        check_close("first vertex weight 1", at_vertex->weight1, 0.0F);
+        check_close("first vertex weight 2", at_vertex->weight2, 0.0F);
+    } else {
+        std::cerr << "FAILED: vertex has barycentric coordinates\n";
+        ++failures;
+    }
+
+    const auto on_edge = tinyrenderer::barycentric_at(
+        point0, point1, point2, ScreenPoint{3.0F, 1.0F});
+    if (on_edge) {
+        check_close("edge weight 0", on_edge->weight0, 0.5F);
+        check_close("edge weight 1", on_edge->weight1, 0.5F);
+        check_close("edge weight 2", on_edge->weight2, 0.0F);
+    } else {
+        std::cerr << "FAILED: edge has barycentric coordinates\n";
+        ++failures;
+    }
+
+    const auto inside = tinyrenderer::barycentric_at(
+        point0, point1, point2, ScreenPoint{2.0F, 2.0F});
+    if (inside) {
+        check_close("barycentric weights sum to one",
+                    inside->weight0 + inside->weight1 + inside->weight2,
+                    1.0F);
+    } else {
+        std::cerr << "FAILED: inside point has barycentric coordinates\n";
+        ++failures;
+    }
+
+    const auto degenerate_weights = tinyrenderer::barycentric_at(
+        ScreenPoint{1.0F, 1.0F},
+        ScreenPoint{2.0F, 2.0F},
+        ScreenPoint{3.0F, 3.0F},
+        ScreenPoint{2.0F, 2.0F});
+    if (degenerate_weights) {
+        std::cerr << "FAILED: degenerate triangle has no barycentric coordinates\n";
+        ++failures;
+    }
+
+    tinyrenderer::Image triangle{7, 7};
+    tinyrenderer::draw_triangle(triangle, point0, point1, point2, white);
+    check_exact_pixels("filled triangle",
+                       triangle,
+                       {{1, 1}, {2, 1}, {3, 1}, {4, 1},
+                        {1, 2}, {2, 2}, {3, 2},
+                        {1, 3}, {2, 3},
+                        {1, 4}},
+                       white);
+
+    tinyrenderer::Image reversed_triangle{7, 7};
+    tinyrenderer::draw_triangle(reversed_triangle, point2, point1, point0, white);
+    check_same_image("reversing triangle winding", triangle, reversed_triangle);
+
+    tinyrenderer::Image degenerate_triangle{7, 7};
+    tinyrenderer::draw_triangle(degenerate_triangle,
+                                ScreenPoint{1.0F, 1.0F},
+                                ScreenPoint{2.0F, 2.0F},
+                                ScreenPoint{3.0F, 3.0F},
+                                white);
+    check_exact_pixels("degenerate triangle", degenerate_triangle, {}, white);
+
+    tinyrenderer::Image clipped_triangle{4, 4};
+    tinyrenderer::draw_triangle(clipped_triangle,
+                                ScreenPoint{-1.0F, -1.0F},
+                                ScreenPoint{3.0F, -1.0F},
+                                ScreenPoint{-1.0F, 3.0F},
+                                white);
+    check_exact_pixels("partially outside triangle",
+                       clipped_triangle,
+                       {{0, 0}, {1, 0}, {0, 1}},
+                       white);
 
     if (failures == 0) {
         std::cout << "All rasterizer tests passed.\n";
