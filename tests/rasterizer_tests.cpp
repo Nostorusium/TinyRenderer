@@ -1,0 +1,113 @@
+#include "tinyrenderer/image.hpp"
+#include "tinyrenderer/rasterizer.hpp"
+
+#include <algorithm>
+#include <initializer_list>
+#include <iostream>
+#include <utility>
+
+namespace {
+
+using Pixel = std::pair<int, int>;
+
+int failures = 0;
+
+void check_exact_pixels(const char* test_name,
+                        const tinyrenderer::Image& image,
+                        const std::initializer_list<Pixel> expected_pixels,
+                        const tinyrenderer::Color line_color)
+{
+    for (int y = 0; y < image.height(); ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            const bool should_be_colored =
+                std::find(expected_pixels.begin(), expected_pixels.end(), Pixel{x, y})
+                != expected_pixels.end();
+            const auto expected_color = should_be_colored
+                ? line_color
+                : tinyrenderer::Color{};
+
+            if (image.pixel(x, y) != expected_color) {
+                std::cerr << "FAILED: " << test_name << " at (" << x << ", " << y << ")\n";
+                ++failures;
+            }
+        }
+    }
+}
+
+void check_same_image(const char* test_name,
+                      const tinyrenderer::Image& first,
+                      const tinyrenderer::Image& second)
+{
+    for (int y = 0; y < first.height(); ++y) {
+        for (int x = 0; x < first.width(); ++x) {
+            if (first.pixel(x, y) != second.pixel(x, y)) {
+                std::cerr << "FAILED: " << test_name << " at (" << x << ", " << y << ")\n";
+                ++failures;
+            }
+        }
+    }
+}
+
+} // namespace
+
+int main()
+{
+    constexpr tinyrenderer::Color white{255, 255, 255};
+
+    tinyrenderer::Image horizontal{7, 7};
+    tinyrenderer::draw_line(horizontal, 1, 2, 5, 2, white);
+    check_exact_pixels("horizontal line",
+                       horizontal,
+                       {{1, 2}, {2, 2}, {3, 2}, {4, 2}, {5, 2}},
+                       white);
+
+    tinyrenderer::Image shallow{7, 7};
+    tinyrenderer::draw_line(shallow, 1, 1, 5, 3, white);
+    check_exact_pixels("shallow line",
+                       shallow,
+                       {{1, 1}, {2, 2}, {3, 2}, {4, 3}, {5, 3}},
+                       white);
+
+    tinyrenderer::Image steep{7, 7};
+    tinyrenderer::draw_line(steep, 1, 1, 3, 5, white);
+    check_exact_pixels("steep line",
+                       steep,
+                       {{1, 1}, {2, 2}, {2, 3}, {3, 4}, {3, 5}},
+                       white);
+
+    tinyrenderer::Image negative_slope{7, 7};
+    tinyrenderer::draw_line(negative_slope, 1, 5, 5, 3, white);
+    check_exact_pixels("negative slope",
+                       negative_slope,
+                       {{1, 5}, {2, 4}, {3, 4}, {4, 3}, {5, 3}},
+                       white);
+
+    tinyrenderer::Image vertical{7, 7};
+    tinyrenderer::draw_line(vertical, 3, 5, 3, 1, white);
+    check_exact_pixels("vertical line",
+                       vertical,
+                       {{3, 1}, {3, 2}, {3, 3}, {3, 4}, {3, 5}},
+                       white);
+
+    tinyrenderer::Image point{7, 7};
+    tinyrenderer::draw_line(point, 3, 4, 3, 4, white);
+    check_exact_pixels("single point", point, {{3, 4}}, white);
+
+    tinyrenderer::Image clipped_by_image{4, 3};
+    tinyrenderer::draw_line(clipped_by_image, -2, 1, 2, 1, white);
+    check_exact_pixels("partially outside line",
+                       clipped_by_image,
+                       {{0, 1}, {1, 1}, {2, 1}},
+                       white);
+
+    tinyrenderer::Image forward{7, 7};
+    tinyrenderer::Image backward{7, 7};
+    tinyrenderer::draw_line(forward, 1, 1, 5, 3, white);
+    tinyrenderer::draw_line(backward, 5, 3, 1, 1, white);
+    check_same_image("reversing endpoints", forward, backward);
+
+    if (failures == 0) {
+        std::cout << "All rasterizer tests passed.\n";
+    }
+    return failures == 0 ? 0 : 1;
+}

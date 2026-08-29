@@ -1,0 +1,6 @@
+/build/
+/output/
+/image_test.ppm
+/.vs/
+*.user
+*.suo
