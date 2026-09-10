@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 project(TinyRenderer LANGUAGES CXX)
 
 add_library(tinyrenderer_core
+    src/depth_buffer.cpp
     src/image.cpp
     src/model.cpp
     src/rasterizer.cpp
@@ -22,6 +23,12 @@ add_executable(triangle_demo
 )
 
 target_link_libraries(triangle_demo PRIVATE tinyrenderer_core)
+
+add_executable(depth_demo
+    src/depth_demo.cpp
+)
+
+target_link_libraries(depth_demo PRIVATE tinyrenderer_core)
 
 if(MSVC)
     target_compile_options(tinyrenderer_core PUBLIC /utf-8)
@@ -44,4 +51,8 @@ if(BUILD_TESTING)
     add_executable(model_tests tests/model_tests.cpp)
     target_link_libraries(model_tests PRIVATE tinyrenderer_core)
     add_test(NAME model_tests COMMAND model_tests)
+
+    add_executable(depth_buffer_tests tests/depth_buffer_tests.cpp)
+    target_link_libraries(depth_buffer_tests PRIVATE tinyrenderer_core)
+    add_test(NAME depth_buffer_tests COMMAND depth_buffer_tests)
 endif()

@@ -7,6 +7,7 @@
 namespace tinyrenderer {
 
 class Image;
+class DepthBuffer;
 
 struct ScreenPoint {
     float x{};
@@ -17,6 +18,11 @@ struct BarycentricCoordinates {
     float weight0{};
     float weight1{};
     float weight2{};
+};
+
+struct ScreenVertex {
+    ScreenPoint position;
+    float depth{};
 };
 
 /*
@@ -37,5 +43,12 @@ void draw_triangle(Image& image,
                    ScreenPoint point1,
                    ScreenPoint point2,
                    Color color) noexcept;
+
+void draw_triangle_with_depth(Image& image,
+                              DepthBuffer& depth_buffer,
+                              ScreenVertex vertex0,
+                              ScreenVertex vertex1,
+                              ScreenVertex vertex2,
+                              Color color) noexcept;
 
 } // namespace tinyrenderer

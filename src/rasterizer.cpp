@@ -1,5 +1,6 @@
 #include "tinyrenderer/rasterizer.hpp"
 
+#include "tinyrenderer/depth_buffer.hpp"
 #include "tinyrenderer/image.hpp"
 
 #include <algorithm>
@@ -7,6 +8,44 @@
 #include <cstdlib>
 
 namespace tinyrenderer {
+namespace {
+
+struct PixelBounds {
+    int min_x{};
+    int max_x{};
+    int min_y{};
+    int max_y{};
+};
+
+// 包围盒切割
+std::optional<PixelBounds> clipped_pixel_bounds(const Image& image,
+                                                const ScreenPoint point0,
+                                                const ScreenPoint point1,
+                                                const ScreenPoint point2) noexcept
+{
+    const float triangle_min_x = std::min({point0.x, point1.x, point2.x});
+    const float triangle_max_x = std::max({point0.x, point1.x, point2.x});
+    const float triangle_min_y = std::min({point0.y, point1.y, point2.y});
+    const float triangle_max_y = std::max({point0.y, point1.y, point2.y});
+
+    const float first_sample_x = std::max(triangle_min_x, 0.5F);
+    const float last_sample_x =
+        std::min(triangle_max_x, static_cast<float>(image.width()) - 0.5F);
+    const float first_sample_y = std::max(triangle_min_y, 0.5F);
+    const float last_sample_y =
+        std::min(triangle_max_y, static_cast<float>(image.height()) - 0.5F);
+    if (first_sample_x > last_sample_x || first_sample_y > last_sample_y) {
+        return std::nullopt;
+    }
+
+    return PixelBounds{
+        static_cast<int>(std::ceil(first_sample_x - 0.5F)),
+        static_cast<int>(std::floor(last_sample_x - 0.5F)),
+        static_cast<int>(std::ceil(first_sample_y - 0.5F)),
+        static_cast<int>(std::floor(last_sample_y - 0.5F))};
+}
+
+} // namespace
 
 void draw_line(Image& image,
                int x0,
@@ -97,31 +136,16 @@ void draw_triangle(Image& image,
         return;
     }
 
-    const float triangle_min_x = std::min({point0.x, point1.x, point2.x});
-    const float triangle_max_x = std::max({point0.x, point1.x, point2.x});
-    const float triangle_min_y = std::min({point0.y, point1.y, point2.y});
-    const float triangle_max_y = std::max({point0.y, point1.y, point2.y});
-
     // 先把包围盒限制到图片内，避免遍历一定会被丢弃的像素。
-    const float first_sample_x = std::max(triangle_min_x, 0.5F);
-    const float last_sample_x =
-        std::min(triangle_max_x, static_cast<float>(image.width()) - 0.5F);
-    const float first_sample_y = std::max(triangle_min_y, 0.5F);
-    const float last_sample_y =
-        std::min(triangle_max_y, static_cast<float>(image.height()) - 0.5F);
-    if (first_sample_x > last_sample_x || first_sample_y > last_sample_y) {
+    const auto bounds = clipped_pixel_bounds(image, point0, point1, point2);
+    if (!bounds) {
         return;
     }
 
-    const int min_x = static_cast<int>(std::ceil(first_sample_x - 0.5F));
-    const int max_x = static_cast<int>(std::floor(last_sample_x - 0.5F));
-    const int min_y = static_cast<int>(std::ceil(first_sample_y - 0.5F));
-    const int max_y = static_cast<int>(std::floor(last_sample_y - 0.5F));
-    
     // 这个边界误差主要是为了浮点数运算产生的精度误差考虑，并不是设计上希望容忍误差。
     constexpr float edge_epsilon = 1.0e-6F;
-    for (int y = min_y; y <= max_y; ++y) {
-        for (int x = min_x; x <= max_x; ++x) {
+    for (int y = bounds->min_y; y <= bounds->max_y; ++y) {
+        for (int x = bounds->min_x; x <= bounds->max_x; ++x) {
             // 覆盖判断使用像素中心，而不是像素左上角。
             const ScreenPoint sample{static_cast<float>(x) + 0.5F,
                                      static_cast<float>(y) + 0.5F};
@@ -129,6 +153,67 @@ void draw_triangle(Image& image,
             if (weights && weights->weight0 >= -edge_epsilon
                 && weights->weight1 >= -edge_epsilon
                 && weights->weight2 >= -edge_epsilon) {
+                image.set_pixel(x, y, color);
+            }
+        }
+    }
+}
+
+/*
+深度测试为每个像素保留最靠近摄像机的片段，避免绘制顺序决定遮挡结果。
+像素深度由三个顶点深度按重心权重插值得到，权重越大，对应顶点影响越大。
+*/
+void draw_triangle_with_depth(Image& image,
+                              DepthBuffer& depth_buffer,
+                              const ScreenVertex vertex0,
+                              const ScreenVertex vertex1,
+                              const ScreenVertex vertex2,
+                              const Color color) noexcept
+{
+    if (image.width() != depth_buffer.width() || image.height() != depth_buffer.height()) {
+        return;
+    }
+
+    const auto initial_weights = barycentric_at(vertex0.position,
+                                                vertex1.position,
+                                                vertex2.position,
+                                                vertex0.position);
+    if (!initial_weights) {
+        return;
+    }
+
+    const auto bounds = clipped_pixel_bounds(image,
+                                             vertex0.position,
+                                             vertex1.position,
+                                             vertex2.position);
+    if (!bounds) {
+        return;
+    }
+
+    constexpr float edge_epsilon = 1.0e-6F;
+    for (int y = bounds->min_y; y <= bounds->max_y; ++y) {
+        for (int x = bounds->min_x; x <= bounds->max_x; ++x) {
+            // 光栅化采样点，对应像素中心
+            const ScreenPoint sample{static_cast<float>(x) + 0.5F,
+                                     static_cast<float>(y) + 0.5F};
+            // 计算出重心坐标，对应3个权重
+            const auto weights = barycentric_at(vertex0.position,
+                                                vertex1.position,
+                                                vertex2.position,
+                                                sample);
+            
+            // 如果重心坐标下有权重小于0 说明在三角形外 不画
+            if (!weights || weights->weight0 < -edge_epsilon
+                || weights->weight1 < -edge_epsilon
+                || weights->weight2 < -edge_epsilon) {
+                continue;
+            }
+
+            // 我们不直接计算每个内部点的深度，而是利用重心坐标的线性插值性质，由3个顶点的深度和重心坐标计算出该点的深度。            
+            const float depth = weights->weight0 * vertex0.depth
+                + weights->weight1 * vertex1.depth
+                + weights->weight2 * vertex2.depth;
+            if (depth_buffer.test_and_set(x, y, depth)) {
                 image.set_pixel(x, y, color);
             }
         }

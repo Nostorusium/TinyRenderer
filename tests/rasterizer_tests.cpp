@@ -1,3 +1,4 @@
+#include "tinyrenderer/depth_buffer.hpp"
 #include "tinyrenderer/image.hpp"
 #include "tinyrenderer/rasterizer.hpp"
 
@@ -196,6 +197,63 @@ int main()
                        clipped_triangle,
                        {{0, 0}, {1, 0}, {0, 1}},
                        white);
+
+    constexpr tinyrenderer::Color far_color{40, 90, 220};
+    constexpr tinyrenderer::Color near_color{235, 110, 60};
+    constexpr tinyrenderer::ScreenVertex far0{point0, 0.8F};
+    constexpr tinyrenderer::ScreenVertex far1{point1, 0.8F};
+    constexpr tinyrenderer::ScreenVertex far2{point2, 0.8F};
+    constexpr tinyrenderer::ScreenVertex near0{point0, 0.2F};
+    constexpr tinyrenderer::ScreenVertex near1{point1, 0.2F};
+    constexpr tinyrenderer::ScreenVertex near2{point2, 0.2F};
+
+    tinyrenderer::Image far_then_near{7, 7};
+    tinyrenderer::DepthBuffer far_then_near_depth{7, 7};
+    tinyrenderer::draw_triangle_with_depth(far_then_near,
+                                           far_then_near_depth,
+                                           far0,
+                                           far1,
+                                           far2,
+                                           far_color);
+    tinyrenderer::draw_triangle_with_depth(far_then_near,
+                                           far_then_near_depth,
+                                           near0,
+                                           near1,
+                                           near2,
+                                           near_color);
+
+    tinyrenderer::Image near_then_far{7, 7};
+    tinyrenderer::DepthBuffer near_then_far_depth{7, 7};
+    tinyrenderer::draw_triangle_with_depth(near_then_far,
+                                           near_then_far_depth,
+                                           near0,
+                                           near1,
+                                           near2,
+                                           near_color);
+    tinyrenderer::draw_triangle_with_depth(near_then_far,
+                                           near_then_far_depth,
+                                           far0,
+                                           far1,
+                                           far2,
+                                           far_color);
+    check_same_image("depth makes draw order irrelevant", far_then_near, near_then_far);
+    if (far_then_near.pixel(2, 2) != near_color) {
+        std::cerr << "FAILED: nearer triangle owns overlapping pixel\n";
+        ++failures;
+    }
+
+    tinyrenderer::Image interpolated_image{7, 7};
+    tinyrenderer::DepthBuffer interpolated_depth{7, 7};
+    tinyrenderer::draw_triangle_with_depth(
+        interpolated_image,
+        interpolated_depth,
+        {point0, 0.2F},
+        {point1, 0.6F},
+        {point2, 1.0F},
+        white);
+    check_close("depth uses barycentric interpolation",
+                interpolated_depth.depth(1, 1),
+                0.35F);
 
     if (failures == 0) {
         std::cout << "All rasterizer tests passed.\n";
