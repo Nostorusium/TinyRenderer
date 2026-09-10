@@ -28,6 +28,19 @@ void check_vector(const tinyrenderer::Vec3 actual,
     }
 }
 
+void check_vector(const tinyrenderer::Vec4 actual,
+                  const tinyrenderer::Vec4 expected,
+                  const char* message)
+{
+    if (std::abs(actual.x - expected.x) > 1.0e-5F
+        || std::abs(actual.y - expected.y) > 1.0e-5F
+        || std::abs(actual.z - expected.z) > 1.0e-5F
+        || std::abs(actual.w - expected.w) > 1.0e-5F) {
+        std::cerr << "FAILED: " << message << '\n';
+        ++failures;
+    }
+}
+
 } // namespace
 
 int main()
@@ -73,6 +86,38 @@ int main()
         std::cerr << "FAILED: zero vector has no direction to normalize\n";
         ++failures;
     }
+
+    using tinyrenderer::Mat4;
+    using tinyrenderer::Vec4;
+
+    const Vec4 point{1.0F, 2.0F, 3.0F, 1.0F};
+    check_vector(Mat4::identity() * point,
+                 point,
+                 "identity matrix leaves a vector unchanged");
+
+    Mat4 translation = Mat4::identity();
+    // 列向量约定下，平移量位于最后一列。
+    translation(0, 3) = 5.0F;
+    translation(1, 3) = -2.0F;
+    translation(2, 3) = 3.0F;
+    check_vector(translation * point,
+                 Vec4{6.0F, 0.0F, 6.0F, 1.0F},
+                 "translation moves a point whose w is one");
+    check_vector(translation * Vec4{1.0F, 2.0F, 3.0F, 0.0F},
+                 Vec4{1.0F, 2.0F, 3.0F, 0.0F},
+                 "translation does not move a direction whose w is zero");
+
+    Mat4 scale = Mat4::identity();
+    scale(0, 0) = 2.0F;
+    scale(1, 1) = 3.0F;
+    scale(2, 2) = 4.0F;
+    const Mat4 scale_then_translate = translation * scale;
+    check_vector(scale_then_translate * point,
+                 Vec4{7.0F, 4.0F, 15.0F, 1.0F},
+                 "rightmost scale runs before leftmost translation");
+    check_vector(scale_then_translate * point,
+                 translation * (scale * point),
+                 "combined matrix matches separate transformations");
 
     if (failures == 0) {
         std::cout << "All math tests passed.\n";

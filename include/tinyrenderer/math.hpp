@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <optional>
 
 namespace tinyrenderer {
@@ -10,6 +12,43 @@ struct Vec3 {
     float x{};
     float y{};
     float z{};
+};
+
+/*
+齐次坐标在三维坐标后增加 w：点通常使用 w = 1，方向使用 w = 0。
+这样平移只影响点，不影响方向，之后也能用同一种矩阵表达透视投影。
+*/
+struct Vec4 {
+    float x{};
+    float y{};
+    float z{};
+    float w{};
+};
+
+// Mat4即 Matrix4，指4x4矩阵
+class Mat4 {
+public:
+    Mat4() = default;
+
+    // 生成单位矩阵
+    [[nodiscard]] static Mat4 identity() noexcept;
+
+    /*
+    邦邦卡邦 C++语法小课堂
+    [[nodiscard]] 表示返回值不应该被无意义地丢弃。
+    如果读了但没用会产生编译警告，但不影响运行。
+
+    函数后的 const 表示该函数不会修改对象的状态 为此它返回的是复制的值而不是引用
+    第二个函数返回 float& 返回一个引用，于是允许了调用者修改矩阵元素
+    */
+
+    // 用 (row, column) 访问数学元素，不让算法依赖底层数组排列。
+    [[nodiscard]] float operator()(std::size_t row, std::size_t column) const;
+    float& operator()(std::size_t row, std::size_t column);
+
+private:
+    // row-major 只描述内存布局：同一行的四个元素连续存放。
+    std::array<float, 16> elements_{};
 };
 
 [[nodiscard]] Vec3 operator+(Vec3 left, Vec3 right) noexcept;
@@ -26,5 +65,11 @@ struct Vec3 {
 
 // 归一化只改变长度、不改变方向；零向量没有方向，因此返回空值。
 [[nodiscard]] std::optional<Vec3> normalized(Vec3 vector) noexcept;
+
+// 项目使用列向量，因此变换写作 M * v；平移位于矩阵最后一列。
+[[nodiscard]] Vec4 operator*(const Mat4& matrix, Vec4 vector);
+
+// 组合矩阵 left * right 作用于向量时，right 对应的变换先执行。
+[[nodiscard]] Mat4 operator*(const Mat4& left, const Mat4& right);
 
 } // namespace tinyrenderer
