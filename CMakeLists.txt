@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 project(TinyRenderer LANGUAGES CXX)
 
 add_library(tinyrenderer_core
+    src/clipper.cpp
     src/depth_buffer.cpp
     src/image.cpp
     src/math.cpp
@@ -30,6 +31,12 @@ add_executable(depth_demo
 )
 
 target_link_libraries(depth_demo PRIVATE tinyrenderer_core)
+
+add_executable(pipeline_demo
+    src/pipeline_demo.cpp
+)
+
+target_link_libraries(pipeline_demo PRIVATE tinyrenderer_core)
 
 if(MSVC)
     target_compile_options(tinyrenderer_core PUBLIC /utf-8)
@@ -60,4 +67,12 @@ if(BUILD_TESTING)
     add_executable(math_tests tests/math_tests.cpp)
     target_link_libraries(math_tests PRIVATE tinyrenderer_core)
     add_test(NAME math_tests COMMAND math_tests)
+
+    add_executable(pipeline_tests tests/pipeline_tests.cpp)
+    target_link_libraries(pipeline_tests PRIVATE tinyrenderer_core)
+    add_test(NAME pipeline_tests COMMAND pipeline_tests)
+
+    add_executable(clipper_tests tests/clipper_tests.cpp)
+    target_link_libraries(clipper_tests PRIVATE tinyrenderer_core)
+    add_test(NAME clipper_tests COMMAND clipper_tests)
 endif()

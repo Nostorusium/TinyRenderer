@@ -14,6 +14,14 @@ using Pixel = std::pair<int, int>;
 
 int failures = 0;
 
+void check(const bool condition, const char* message)
+{
+    if (!condition) {
+        std::cerr << "FAILED: " << message << '\n';
+        ++failures;
+    }
+}
+
 void check_exact_pixels(const char* test_name,
                         const tinyrenderer::Image& image,
                         const std::initializer_list<Pixel> expected_pixels,
@@ -169,10 +177,9 @@ int main()
     tinyrenderer::draw_triangle(triangle, point0, point1, point2, white);
     check_exact_pixels("filled triangle",
                        triangle,
-                       {{1, 1}, {2, 1}, {3, 1}, {4, 1},
-                        {1, 2}, {2, 2}, {3, 2},
-                        {1, 3}, {2, 3},
-                        {1, 4}},
+                       {{1, 1}, {2, 1}, {3, 1},
+                        {1, 2}, {2, 2},
+                        {1, 3}},
                        white);
 
     tinyrenderer::Image reversed_triangle{7, 7};
@@ -195,8 +202,38 @@ int main()
                                 white);
     check_exact_pixels("partially outside triangle",
                        clipped_triangle,
-                       {{0, 0}, {1, 0}, {0, 1}},
+                       {{0, 0}},
                        white);
+
+    constexpr tinyrenderer::Color red{220, 60, 50};
+    constexpr tinyrenderer::Color green{60, 190, 90};
+    constexpr ScreenPoint square0{1.0F, 1.0F};
+    constexpr ScreenPoint square1{5.0F, 1.0F};
+    constexpr ScreenPoint square2{5.0F, 5.0F};
+    constexpr ScreenPoint square3{1.0F, 5.0F};
+
+    tinyrenderer::Image shared_edge_forward{7, 7};
+    tinyrenderer::draw_triangle(
+        shared_edge_forward, square0, square1, square2, red);
+    tinyrenderer::draw_triangle(
+        shared_edge_forward, square0, square2, square3, green);
+
+    tinyrenderer::Image shared_edge_backward{7, 7};
+    tinyrenderer::draw_triangle(
+        shared_edge_backward, square0, square2, square3, green);
+    tinyrenderer::draw_triangle(
+        shared_edge_backward, square0, square1, square2, red);
+    check_same_image("top-left shared edge is independent of draw order",
+                     shared_edge_forward,
+                     shared_edge_backward);
+
+    for (int y = 1; y < 5; ++y) {
+        for (int x = 1; x < 5; ++x) {
+            check(shared_edge_forward.pixel(x, y) == red
+                      || shared_edge_forward.pixel(x, y) == green,
+                  "two shared-edge triangles fill their square without cracks");
+        }
+    }
 
     constexpr tinyrenderer::Color far_color{40, 90, 220};
     constexpr tinyrenderer::Color near_color{235, 110, 60};

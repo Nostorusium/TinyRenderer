@@ -17,6 +17,61 @@ struct PixelBounds {
     int max_y{};
 };
 
+/*
+top-left rule 是光栅化阶段的共享边规则。
+假如一个像素落在两个三角形的共享边上，到底归谁？
+为了避免两个三角形重复覆盖或同时漏掉，我们规定：
+位于三角形上边或左边的边界采样点算内部。下边或右边不算。
+*/
+
+// 判断点在一条有向边的哪一侧，>0 在左侧，<0 在右侧，=0 在边上。
+float edge_function(const ScreenPoint start,
+                    const ScreenPoint end,
+                    const ScreenPoint sample) noexcept
+{
+    return (end.x - start.x) * (sample.y - start.y)
+        - (end.y - start.y) * (sample.x - start.x);
+}
+
+bool is_top_left_edge(const ScreenPoint start, const ScreenPoint end) noexcept
+{
+    const float delta_x = end.x - start.x;
+    const float delta_y = end.y - start.y;
+
+    // 图片 Y 向下：向上的边是左边，水平且向右的边是上边。
+    return delta_y < 0.0F || (delta_y == 0.0F && delta_x > 0.0F);
+}
+
+bool edge_contains_sample(const ScreenPoint start,
+                          const ScreenPoint end,
+                          const ScreenPoint sample) noexcept
+{
+    const float edge_value = edge_function(start, end, sample);
+    // 这个边界误差主要是为了浮点数运算产生的精度误差考虑，并不是设计上希望容忍误差。
+    constexpr float edge_epsilon = 1.0e-6F;
+    if (edge_value > edge_epsilon) {
+        return true;
+    }
+    if (edge_value < -edge_epsilon) {
+        return false;
+    }
+    // 认为可以 = 0
+
+    // 共享边附近只由 top-left 一侧接收，避免两个三角形重复覆盖或同时漏掉。
+    return is_top_left_edge(start, end);
+}
+
+// 向量叉乘判别法
+bool triangle_contains_sample(const ScreenPoint point0,
+                              const ScreenPoint point1,
+                              const ScreenPoint point2,
+                              const ScreenPoint sample) noexcept
+{
+    return edge_contains_sample(point0, point1, sample)
+        && edge_contains_sample(point1, point2, sample)
+        && edge_contains_sample(point2, point0, sample);
+}
+
 // 包围盒切割
 std::optional<PixelBounds> clipped_pixel_bounds(const Image& image,
                                                 const ScreenPoint point0,
@@ -127,13 +182,18 @@ std::optional<BarycentricCoordinates> barycentric_at(
 包围盒缩小候选像素范围，重心坐标再判断每个像素中心是否在三角形内。
 */
 void draw_triangle(Image& image,
-                   const ScreenPoint point0,
-                   const ScreenPoint point1,
-                   const ScreenPoint point2,
+                   ScreenPoint point0,
+                   ScreenPoint point1,
+                   ScreenPoint point2,
                    const Color color) noexcept
 {
-    if (!barycentric_at(point0, point1, point2, point0)) {
+    constexpr float degenerate_epsilon = 1.0e-6F;
+    const float signed_area = edge_function(point0, point1, point2);
+    if (std::abs(signed_area) <= degenerate_epsilon) {
         return;
+    }
+    if (signed_area < 0.0F) {
+        std::swap(point1, point2);
     }
 
     // 先把包围盒限制到图片内，避免遍历一定会被丢弃的像素。
@@ -142,17 +202,12 @@ void draw_triangle(Image& image,
         return;
     }
 
-    // 这个边界误差主要是为了浮点数运算产生的精度误差考虑，并不是设计上希望容忍误差。
-    constexpr float edge_epsilon = 1.0e-6F;
     for (int y = bounds->min_y; y <= bounds->max_y; ++y) {
         for (int x = bounds->min_x; x <= bounds->max_x; ++x) {
             // 覆盖判断使用像素中心，而不是像素左上角。
             const ScreenPoint sample{static_cast<float>(x) + 0.5F,
                                      static_cast<float>(y) + 0.5F};
-            const auto weights = barycentric_at(point0, point1, point2, sample);
-            if (weights && weights->weight0 >= -edge_epsilon
-                && weights->weight1 >= -edge_epsilon
-                && weights->weight2 >= -edge_epsilon) {
+            if (triangle_contains_sample(point0, point1, point2, sample)) {
                 image.set_pixel(x, y, color);
             }
         }
@@ -165,21 +220,23 @@ void draw_triangle(Image& image,
 */
 void draw_triangle_with_depth(Image& image,
                               DepthBuffer& depth_buffer,
-                              const ScreenVertex vertex0,
-                              const ScreenVertex vertex1,
-                              const ScreenVertex vertex2,
+                              ScreenVertex vertex0,
+                              ScreenVertex vertex1,
+                              ScreenVertex vertex2,
                               const Color color) noexcept
 {
     if (image.width() != depth_buffer.width() || image.height() != depth_buffer.height()) {
         return;
     }
 
-    const auto initial_weights = barycentric_at(vertex0.position,
-                                                vertex1.position,
-                                                vertex2.position,
-                                                vertex0.position);
-    if (!initial_weights) {
+    constexpr float degenerate_epsilon = 1.0e-6F;
+    const float signed_area =
+        edge_function(vertex0.position, vertex1.position, vertex2.position);
+    if (std::abs(signed_area) <= degenerate_epsilon) {
         return;
+    }
+    if (signed_area < 0.0F) {
+        std::swap(vertex1, vertex2);
     }
 
     const auto bounds = clipped_pixel_bounds(image,
@@ -190,22 +247,25 @@ void draw_triangle_with_depth(Image& image,
         return;
     }
 
-    constexpr float edge_epsilon = 1.0e-6F;
     for (int y = bounds->min_y; y <= bounds->max_y; ++y) {
         for (int x = bounds->min_x; x <= bounds->max_x; ++x) {
             // 光栅化采样点，对应像素中心
             const ScreenPoint sample{static_cast<float>(x) + 0.5F,
                                      static_cast<float>(y) + 0.5F};
+            // 如果不符合统一的 top-left 边界规则，说明在三角形外或属于共享边另一侧，不画。
+            if (!triangle_contains_sample(vertex0.position,
+                                          vertex1.position,
+                                          vertex2.position,
+                                          sample)) {
+                continue;
+            }
+
             // 计算出重心坐标，对应3个权重
             const auto weights = barycentric_at(vertex0.position,
                                                 vertex1.position,
                                                 vertex2.position,
                                                 sample);
-            
-            // 如果重心坐标下有权重小于0 说明在三角形外 不画
-            if (!weights || weights->weight0 < -edge_epsilon
-                || weights->weight1 < -edge_epsilon
-                || weights->weight2 < -edge_epsilon) {
+            if (!weights) {
                 continue;
             }
 
