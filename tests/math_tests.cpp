@@ -199,6 +199,66 @@ int main()
         ++failures;
     }
 
+    const auto projection = tinyrenderer::perspective(
+        quarter_turn, 2.0F, 1.0F, 10.0F);
+    if (projection) {
+        const Vec4 near_clip = *projection * Vec4{0.0F, 0.0F, -1.0F, 1.0F};
+        const Vec4 far_clip = *projection * Vec4{0.0F, 0.0F, -10.0F, 1.0F};
+        check_close(near_clip.w, 1.0F, "near point stores distance in clip w");
+        check_close(far_clip.w, 10.0F, "far point stores distance in clip w");
+
+        const auto near_ndc = tinyrenderer::perspective_divide(near_clip);
+        const auto far_ndc = tinyrenderer::perspective_divide(far_clip);
+        const auto top_ndc = tinyrenderer::perspective_divide(
+            *projection * Vec4{0.0F, 1.0F, -1.0F, 1.0F});
+        const auto right_ndc = tinyrenderer::perspective_divide(
+            *projection * Vec4{2.0F, 0.0F, -1.0F, 1.0F});
+        if (near_ndc && far_ndc && top_ndc && right_ndc) {
+            check_vector(*near_ndc,
+                         Vec3{0.0F, 0.0F, -1.0F},
+                         "near plane maps to NDC negative one");
+            check_vector(*far_ndc,
+                         Vec3{0.0F, 0.0F, 1.0F},
+                         "far plane maps to NDC positive one");
+            check_vector(*top_ndc,
+                         Vec3{0.0F, 1.0F, -1.0F},
+                         "vertical field of view maps the near top edge to NDC one");
+            check_vector(*right_ndc,
+                         Vec3{1.0F, 0.0F, -1.0F},
+                         "aspect ratio maps the near right edge to NDC one");
+        } else {
+            std::cerr << "FAILED: valid clip positions survive perspective divide\n";
+            ++failures;
+        }
+
+        const auto nearer_x = tinyrenderer::perspective_divide(
+            *projection * Vec4{1.0F, 0.0F, -2.0F, 1.0F});
+        const auto farther_x = tinyrenderer::perspective_divide(
+            *projection * Vec4{1.0F, 0.0F, -4.0F, 1.0F});
+        if (nearer_x && farther_x) {
+            check_close(nearer_x->x, 0.25F, "nearer point keeps a larger NDC x");
+            check_close(farther_x->x, 0.125F, "farther point gets a smaller NDC x");
+        } else {
+            std::cerr << "FAILED: visible points survive perspective divide\n";
+            ++failures;
+        }
+    } else {
+        std::cerr << "FAILED: valid perspective parameters create a matrix\n";
+        ++failures;
+    }
+
+    if (tinyrenderer::perspective(0.0F, 1.0F, 1.0F, 10.0F)
+        || tinyrenderer::perspective(quarter_turn, 0.0F, 1.0F, 10.0F)
+        || tinyrenderer::perspective(quarter_turn, 1.0F, 0.0F, 10.0F)
+        || tinyrenderer::perspective(quarter_turn, 1.0F, 10.0F, 10.0F)) {
+        std::cerr << "FAILED: invalid perspective parameters are rejected\n";
+        ++failures;
+    }
+    if (tinyrenderer::perspective_divide(Vec4{})) {
+        std::cerr << "FAILED: perspective divide rejects zero w\n";
+        ++failures;
+    }
+
     if (failures == 0) {
         std::cout << "All math tests passed.\n";
     }

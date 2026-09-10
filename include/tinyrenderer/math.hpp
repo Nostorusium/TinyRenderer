@@ -81,13 +81,24 @@ private:
 /*
 View 变换把世界坐标转换到摄像机坐标。
 摄像机位置与观察目标不能重合，up 也不能和观察方向平行。
-
 View 变换的另一个理解是让包括摄像机在内的所有物体都围绕摄像机位置旋转、平移，使摄像机最终落在原点，朝向 -Z 轴。
 所以它只需要取对摄像机的M变换的逆矩阵
 */
 [[nodiscard]] std::optional<Mat4> look_at(Vec3 eye,
                                           Vec3 target,
                                           Vec3 up) noexcept;
+
+/*
+透视投影先把摄像机空间的视锥体变成齐次裁剪坐标。
+之后还要除以 w，才能得到范围为 [-1, 1] 的 NDC 标准立方体。
+*/
+[[nodiscard]] std::optional<Mat4> perspective(float vertical_fov_radians,
+                                              float aspect_ratio,
+                                              float near_plane,
+                                              float far_plane) noexcept;
+
+// 透视除法会让远处物体变小；w 太接近零时无法安全执行。
+[[nodiscard]] std::optional<Vec3> perspective_divide(Vec4 clip_position) noexcept;
 
 // 项目使用列向量，因此变换写作 M * v；平移位于矩阵最后一列。
 [[nodiscard]] Vec4 operator*(const Mat4& matrix, Vec4 vector);

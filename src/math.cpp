@@ -86,6 +86,61 @@ std::optional<Mat4> look_at(const Vec3 eye,
     return view;
 }
 
+std::optional<Mat4> perspective(const float vertical_fov_radians,
+                                const float aspect_ratio,
+                                const float near_plane,
+                                const float far_plane) noexcept
+{
+    constexpr float pi = 3.14159265358979323846F;
+    if (!std::isfinite(vertical_fov_radians)
+        || !std::isfinite(aspect_ratio)
+        || !std::isfinite(near_plane)
+        || !std::isfinite(far_plane)
+        || vertical_fov_radians <= 0.0F
+        || vertical_fov_radians >= pi
+        || aspect_ratio <= 0.0F
+        || near_plane <= 0.0F
+        || far_plane <= near_plane) {
+        return std::nullopt;
+    }
+
+    const float vertical_scale =
+        1.0F / std::tan(vertical_fov_radians * 0.5F);
+
+    Mat4 projection;
+
+    // X 和 Y 先按视野角与宽高比缩放，使视锥体的侧面最终对应 NDC 的 ±1。
+    projection(0, 0) = vertical_scale / aspect_ratio;
+    projection(1, 1) = vertical_scale;
+
+    // 摄像机朝 -Z 看；这两项让近、远裁剪面在透视除法后映射到 NDC 的 -1 和 +1。
+    projection(2, 2) = (far_plane + near_plane) / (near_plane - far_plane);
+    projection(2, 3) =
+        (2.0F * far_plane * near_plane) / (near_plane - far_plane);
+
+    // clip.w = -camera.z。之后除以 w，距离越远，X 和 Y 就会被除得越小。
+    projection(3, 2) = -1.0F;
+    return projection;
+}
+
+std::optional<Vec3> perspective_divide(const Vec4 clip_position) noexcept
+{
+    constexpr float zero_w_epsilon = 1.0e-6F;
+    if (!std::isfinite(clip_position.x)
+        || !std::isfinite(clip_position.y)
+        || !std::isfinite(clip_position.z)
+        || !std::isfinite(clip_position.w)
+        || std::abs(clip_position.w) <= zero_w_epsilon) {
+        return std::nullopt;
+    }
+
+    const float inverse_w = 1.0F / clip_position.w;
+    return Vec3{
+        clip_position.x * inverse_w,
+        clip_position.y * inverse_w,
+        clip_position.z * inverse_w};
+}
+
 Mat4 Mat4::identity() noexcept
 {
     Mat4 result;
