@@ -259,6 +259,29 @@ int main()
         ++failures;
     }
 
+    const auto viewport = tinyrenderer::viewport(800, 600);
+    if (viewport) {
+        check_vector(*viewport * Vec4{-1.0F, 1.0F, -1.0F, 1.0F},
+                     Vec4{0.0F, 0.0F, 0.0F, 1.0F},
+                     "NDC top-left near corner maps to image origin and zero depth");
+        check_vector(*viewport * Vec4{0.0F, 0.0F, 0.0F, 1.0F},
+                     Vec4{400.0F, 300.0F, 0.5F, 1.0F},
+                     "NDC center maps to image center and middle depth");
+        check_vector(*viewport * Vec4{1.0F, -1.0F, 1.0F, 1.0F},
+                     Vec4{800.0F, 600.0F, 1.0F, 1.0F},
+                     "NDC bottom-right far corner maps to image boundary and one depth");
+    } else {
+        std::cerr << "FAILED: positive image dimensions create a viewport matrix\n";
+        ++failures;
+    }
+
+    if (tinyrenderer::viewport(0, 600)
+        || tinyrenderer::viewport(800, 0)
+        || tinyrenderer::viewport(-1, 600)) {
+        std::cerr << "FAILED: viewport rejects non-positive dimensions\n";
+        ++failures;
+    }
+
     if (failures == 0) {
         std::cout << "All math tests passed.\n";
     }

@@ -141,6 +141,37 @@ std::optional<Vec3> perspective_divide(const Vec4 clip_position) noexcept
         clip_position.z * inverse_w};
 }
 
+/*
+[ width/2      0       0    width/2  ]
+[    0     -height/2   0    height/2 ]
+[    0         0      1/2      1/2   ]
+[    0         0       0        1    ]
+和 games101 的给出的视口变换矩阵有所不同。这是因为自顶向下的学习流程。
+我们先实现了光栅化与z-buffer，之后回头实现线性代数的数学部分。因此，此处的视口变换矩阵在具体的形式上有所不同。
+*/
+std::optional<Mat4> viewport(const int width, const int height) noexcept
+{
+    if (width <= 0 || height <= 0) {
+        return std::nullopt;
+    }
+
+    const float half_width = static_cast<float>(width) * 0.5F;
+    const float half_height = static_cast<float>(height) * 0.5F;
+
+    Mat4 result = Mat4::identity();
+    result(0, 0) = half_width;
+    result(0, 3) = half_width;
+
+    // NDC 的 +Y 向上，图片的 +Y 向下，所以只在这里翻转 Y。
+    result(1, 1) = -half_height;
+    result(1, 3) = half_height;
+
+    // 顶点先保存这个 [0, 1] 深度；三角形内部的像素深度稍后由重心坐标插值。
+    result(2, 2) = 0.5F;
+    result(2, 3) = 0.5F;
+    return result;
+}
+
 Mat4 Mat4::identity() noexcept
 {
     Mat4 result;

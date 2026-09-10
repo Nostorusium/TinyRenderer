@@ -100,6 +100,12 @@ View 变换的另一个理解是让包括摄像机在内的所有物体都围绕
 // 透视除法会让远处物体变小；w 太接近零时无法安全执行。
 [[nodiscard]] std::optional<Vec3> perspective_divide(Vec4 clip_position) noexcept;
 
+/*
+Viewport 变换把 NDC 映射到图片边界，并把深度从 [-1, 1] 映射到 [0, 1]。
+它必须在透视除法之后执行。
+*/
+[[nodiscard]] std::optional<Mat4> viewport(int width, int height) noexcept;
+
 // 项目使用列向量，因此变换写作 M * v；平移位于矩阵最后一列。
 [[nodiscard]] Vec4 operator*(const Mat4& matrix, Vec4 vector);
 
