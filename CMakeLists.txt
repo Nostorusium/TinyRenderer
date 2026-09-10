@@ -5,6 +5,7 @@ project(TinyRenderer LANGUAGES CXX)
 add_library(tinyrenderer_core
     src/depth_buffer.cpp
     src/image.cpp
+    src/math.cpp
     src/model.cpp
     src/rasterizer.cpp
 )
@@ -55,4 +56,8 @@ if(BUILD_TESTING)
     add_executable(depth_buffer_tests tests/depth_buffer_tests.cpp)
     target_link_libraries(depth_buffer_tests PRIVATE tinyrenderer_core)
     add_test(NAME depth_buffer_tests COMMAND depth_buffer_tests)
+
+    add_executable(math_tests tests/math_tests.cpp)
+    target_link_libraries(math_tests PRIVATE tinyrenderer_core)
+    add_test(NAME math_tests COMMAND math_tests)
 endif()
