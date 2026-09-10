@@ -50,6 +50,42 @@ std::optional<Vec3> normalized(const Vec3 vector) noexcept
     return vector * inverse_length;
 }
 
+std::optional<Mat4> look_at(const Vec3 eye,
+                            const Vec3 target,
+                            const Vec3 up) noexcept
+{
+    // 摄像机朝 -Z 看，所以摄像机自身的 +Z 轴指向观察目标的反方向。
+    const auto camera_z = normalized(eye - target);
+    if (!camera_z) {
+        return std::nullopt;
+    }
+
+    const auto camera_x = normalized(cross(up, *camera_z));
+    if (!camera_x) {
+        return std::nullopt;
+    }
+    const Vec3 camera_y = cross(*camera_z, *camera_x);
+
+    Mat4 view = Mat4::identity();
+
+    // 前三行分别计算一个世界坐标在摄像机 X、Y、Z 方向上的分量。
+    view(0, 0) = camera_x->x;
+    view(0, 1) = camera_x->y;
+    view(0, 2) = camera_x->z;
+    view(1, 0) = camera_y.x;
+    view(1, 1) = camera_y.y;
+    view(1, 2) = camera_y.z;
+    view(2, 0) = camera_z->x;
+    view(2, 1) = camera_z->y;
+    view(2, 2) = camera_z->z;
+
+    // 这里的负号相当于对摄像机的世界位置取逆：摄像机最终会落在原点。
+    view(0, 3) = -dot(*camera_x, eye);
+    view(1, 3) = -dot(camera_y, eye);
+    view(2, 3) = -dot(*camera_z, eye);
+    return view;
+}
+
 Mat4 Mat4::identity() noexcept
 {
     Mat4 result;
@@ -57,6 +93,65 @@ Mat4 Mat4::identity() noexcept
     result.elements_[5] = 1.0F;
     result.elements_[10] = 1.0F;
     result.elements_[15] = 1.0F;
+    return result;
+}
+
+Mat4 Mat4::translation(const Vec3 offset) noexcept
+{
+    Mat4 result = identity();
+
+    // 列向量约定下，最后一列乘以 w：点的 w = 1，所以会受到平移；方向的 w = 0，所以不会。
+    result(0, 3) = offset.x;
+    result(1, 3) = offset.y;
+    result(2, 3) = offset.z;
+    return result;
+}
+
+Mat4 Mat4::scaling(const Vec3 factors) noexcept
+{
+    Mat4 result = identity();
+    result(0, 0) = factors.x;
+    result(1, 1) = factors.y;
+    result(2, 2) = factors.z;
+    return result;
+}
+
+Mat4 Mat4::rotation_x(const float radians) noexcept
+{
+    Mat4 result = identity();
+    const float cosine = std::cos(radians);
+    const float sine = std::sin(radians);
+
+    result(1, 1) = cosine;
+    result(1, 2) = -sine;
+    result(2, 1) = sine;
+    result(2, 2) = cosine;
+    return result;
+}
+
+Mat4 Mat4::rotation_y(const float radians) noexcept
+{
+    Mat4 result = identity();
+    const float cosine = std::cos(radians);
+    const float sine = std::sin(radians);
+
+    result(0, 0) = cosine;
+    result(0, 2) = sine;
+    result(2, 0) = -sine;
+    result(2, 2) = cosine;
+    return result;
+}
+
+Mat4 Mat4::rotation_z(const float radians) noexcept
+{
+    Mat4 result = identity();
+    const float cosine = std::cos(radians);
+    const float sine = std::sin(radians);
+
+    result(0, 0) = cosine;
+    result(0, 1) = -sine;
+    result(1, 0) = sine;
+    result(1, 1) = cosine;
     return result;
 }
 

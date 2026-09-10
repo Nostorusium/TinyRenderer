@@ -119,6 +119,86 @@ int main()
                  translation * (scale * point),
                  "combined matrix matches separate transformations");
 
+    const Mat4 constructed_translation = Mat4::translation({5.0F, -2.0F, 3.0F});
+    check_vector(constructed_translation * point,
+                 Vec4{6.0F, 0.0F, 6.0F, 1.0F},
+                 "translation constructor moves a point");
+    check_vector(constructed_translation * Vec4{1.0F, 2.0F, 3.0F, 0.0F},
+                 Vec4{1.0F, 2.0F, 3.0F, 0.0F},
+                 "translation constructor leaves a direction unchanged");
+
+    const Mat4 constructed_scale = Mat4::scaling({2.0F, 3.0F, 4.0F});
+    check_vector(constructed_scale * point,
+                 Vec4{2.0F, 6.0F, 12.0F, 1.0F},
+                 "scaling constructor changes each spatial axis");
+
+    constexpr float half_turn = 3.14159265358979323846F;
+    constexpr float quarter_turn = half_turn / 2.0F;
+    check_vector(Mat4::rotation_x(quarter_turn) * Vec4{0.0F, 1.0F, 0.0F, 0.0F},
+                 Vec4{0.0F, 0.0F, 1.0F, 0.0F},
+                 "positive X rotation moves Y toward Z");
+    check_vector(Mat4::rotation_y(quarter_turn) * Vec4{0.0F, 0.0F, 1.0F, 0.0F},
+                 Vec4{1.0F, 0.0F, 0.0F, 0.0F},
+                 "positive Y rotation moves Z toward X");
+    check_vector(Mat4::rotation_z(quarter_turn) * Vec4{1.0F, 0.0F, 0.0F, 0.0F},
+                 Vec4{0.0F, 1.0F, 0.0F, 0.0F},
+                 "positive Z rotation moves X toward Y");
+
+    const Mat4 model = Mat4::translation({10.0F, 0.0F, 0.0F})
+        * Mat4::rotation_z(quarter_turn)
+        * Mat4::scaling({2.0F, 2.0F, 2.0F});
+    check_vector(model * Vec4{1.0F, 0.0F, 0.0F, 1.0F},
+                 Vec4{10.0F, 2.0F, 0.0F, 1.0F},
+                 "model composition applies scale then rotation then translation");
+
+    const Vec3 camera_position{2.0F, 3.0F, 4.0F};
+    const Vec3 camera_target{2.0F, 3.0F, 3.0F};
+    const auto view = tinyrenderer::look_at(camera_position,
+                                            camera_target,
+                                            Vec3{0.0F, 1.0F, 0.0F});
+    if (view) {
+        check_vector(*view * Vec4{2.0F, 3.0F, 4.0F, 1.0F},
+                     Vec4{0.0F, 0.0F, 0.0F, 1.0F},
+                     "view moves the camera position to the origin");
+        check_vector(*view * Vec4{2.0F, 3.0F, 3.0F, 1.0F},
+                     Vec4{0.0F, 0.0F, -1.0F, 1.0F},
+                     "view places the target on the camera negative Z axis");
+        check_vector(*view * Vec4{1.0F, 0.0F, 0.0F, 0.0F},
+                     Vec4{1.0F, 0.0F, 0.0F, 0.0F},
+                     "camera translation does not affect a direction");
+
+        const Mat4 placed_model = Mat4::translation({1.0F, 0.0F, 0.0F});
+        check_vector((*view * placed_model) * Vec4{0.0F, 0.0F, 0.0F, 1.0F},
+                     Vec4{-1.0F, -3.0F, -4.0F, 1.0F},
+                     "view runs after model when transforming a local point");
+    } else {
+        std::cerr << "FAILED: valid camera creates a view matrix\n";
+        ++failures;
+    }
+
+    const auto turned_view = tinyrenderer::look_at(Vec3{},
+                                                   Vec3{1.0F, 0.0F, 0.0F},
+                                                   Vec3{0.0F, 1.0F, 0.0F});
+    if (turned_view) {
+        check_vector(*turned_view * Vec4{1.0F, 0.0F, 0.0F, 1.0F},
+                     Vec4{0.0F, 0.0F, -1.0F, 1.0F},
+                     "turned camera still sees its target along negative Z");
+    } else {
+        std::cerr << "FAILED: turned camera creates a view matrix\n";
+        ++failures;
+    }
+
+    if (tinyrenderer::look_at(Vec3{}, Vec3{}, Vec3{0.0F, 1.0F, 0.0F})) {
+        std::cerr << "FAILED: camera position and target cannot coincide\n";
+        ++failures;
+    }
+    if (tinyrenderer::look_at(Vec3{},
+                              Vec3{0.0F, 0.0F, -1.0F},
+                              Vec3{0.0F, 0.0F, -1.0F})) {
+        std::cerr << "FAILED: camera up cannot be parallel to its view direction\n";
+        ++failures;
+    }
+
     if (failures == 0) {
         std::cout << "All math tests passed.\n";
     }

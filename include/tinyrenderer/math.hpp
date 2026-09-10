@@ -34,6 +34,18 @@ public:
     [[nodiscard]] static Mat4 identity() noexcept;
 
     /*
+    Model变换：包含平移、缩放、旋转。影响物体在世界空间中的“摆放”
+
+    */
+    [[nodiscard]] static Mat4 translation(Vec3 offset) noexcept;
+    [[nodiscard]] static Mat4 scaling(Vec3 factors) noexcept;
+
+    // 旋转角使用弧度，并遵守右手坐标系的正方向。
+    [[nodiscard]] static Mat4 rotation_x(float radians) noexcept;
+    [[nodiscard]] static Mat4 rotation_y(float radians) noexcept;
+    [[nodiscard]] static Mat4 rotation_z(float radians) noexcept;
+
+    /*
     邦邦卡邦 C++语法小课堂
     [[nodiscard]] 表示返回值不应该被无意义地丢弃。
     如果读了但没用会产生编译警告，但不影响运行。
@@ -65,6 +77,17 @@ private:
 
 // 归一化只改变长度、不改变方向；零向量没有方向，因此返回空值。
 [[nodiscard]] std::optional<Vec3> normalized(Vec3 vector) noexcept;
+
+/*
+View 变换把世界坐标转换到摄像机坐标。
+摄像机位置与观察目标不能重合，up 也不能和观察方向平行。
+
+View 变换的另一个理解是让包括摄像机在内的所有物体都围绕摄像机位置旋转、平移，使摄像机最终落在原点，朝向 -Z 轴。
+所以它只需要取对摄像机的M变换的逆矩阵
+*/
+[[nodiscard]] std::optional<Mat4> look_at(Vec3 eye,
+                                          Vec3 target,
+                                          Vec3 up) noexcept;
 
 // 项目使用列向量，因此变换写作 M * v；平移位于矩阵最后一列。
 [[nodiscard]] Vec4 operator*(const Mat4& matrix, Vec4 vector);
